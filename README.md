@@ -45,7 +45,7 @@ This creates a fully independent repository with its own history.
 If you prefer to do it manually, clone this repository, remove `.git`, and create a fresh repository:
 
 ```bash
-git clone https://github.com/flowlow969/ROS2_Container_tamplate.git MyNewProject
+git clone https://github.com/flowlow969/ROS2_Container_Template.git MyNewProject
 cd MyNewProject
 rm -rf .git
 git init --initial-branch=main
