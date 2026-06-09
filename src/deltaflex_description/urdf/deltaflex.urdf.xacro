@@ -1,0 +1,272 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="deltaflex">
+
+  <!-- ================================================================
+       Geometry parameters — from Parmiggiani et al. paper
+       Measure actual values from the STEP files once available.
+       ================================================================ -->
+  <xacro:property name="base_r" value="0.100"/>
+  <!-- base circumradius [m] -->
+  <xacro:property name="ee_r" value="0.040"/>
+  <!-- EE circumradius [m] -->
+  <xacro:property name="upper_len" value="0.120"/>
+  <!-- upper arm length [m] -->
+  <xacro:property name="lower_len" value="0.200"/>
+  <!-- forearm length [m] -->
+
+  <!-- Joint dynamics — rigid by default for position control -->
+  <xacro:property name="joint_damping" value="0.01"/>
+  <!-- N·m·s/rad -->
+  <xacro:property name="joint_friction" value="0.002"/>
+  <!-- N·m -->
+
+  <!-- ================================================================
+       Inertia helper macro — approximates solid cylinder
+       ================================================================ -->
+  <xacro:macro name="cyl_inertia" params="m r h">
+    <inertial>
+      <mass value="${m}"/>
+      <inertia ixx="${m*(3*r*r+h*h)/12}" ixy="0" ixz="0" iyy="${m*(3*r*r+h*h)/12}" iyz="0" izz="${m*r*r/2}"/>
+    </inertial>
+  </xacro:macro>
+
+  <!-- ================================================================
+       WORLD + BASE
+       ================================================================ -->
+  <link name="world"/>
+
+  <joint name="world_to_base" type="fixed">
+    <parent link="world"/>
+    <child link="base_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <cylinder radius="${base_r}" length="0.015"/>
+      </geometry>
+      <material name="gray">
+        <color rgba="0.55 0.55 0.55 1"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="${base_r}" length="0.015"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.50"/>
+      <inertia ixx="0.0012" ixy="0" ixz="0" iyy="0.0012" iyz="0" izz="0.0025"/>
+    </inertial>
+  </link>
+
+  <!-- ================================================================
+       ARM MACRO — instantiated 3× at 90°, 210°, 330°
+       Each arm:
+         motor_N  (fixed to base)
+         → joint_N (revolute, actuated)  → upper_arm_N
+         → elbow_N (revolute, passive)   → forearm_N
+         → forearm_N_to_ee_attach (fixed) → ee_attach_N
+       ================================================================ -->
+  <xacro:macro name="delta_arm" params="id angle_deg">
+
+    <!-- Motor body fixed to base -->
+    <link name="motor_${id}">
+      <visual>
+        <geometry>
+          <box size="0.042 0.042 0.048"/>
+        </geometry>
+        <material name="blue">
+          <color rgba="0.2 0.3 0.8 1"/>
+        </material>
+      </visual>
+      <collision>
+        <geometry>
+          <box size="0.042 0.042 0.048"/>
+        </geometry>
+      </collision>
+      <inertial>
+        <mass value="0.28"/>
+        <inertia ixx="0.0001" ixy="0" ixz="0" iyy="0.0001" iyz="0" izz="0.0001"/>
+      </inertial>
+    </link>
+
+    <joint name="base_to_motor_${id}" type="fixed">
+      <parent link="base_link"/>
+      <child link="motor_${id}"/>
+      <origin xyz="${base_r*cos(angle_deg * pi / 180)}
+             ${base_r*sin(angle_deg * pi / 180)}
+             -0.024" rpy="0 0 ${angle_deg * pi / 180}"/>
+    </joint>
+
+    <!-- ACTUATED joint — motor shaft (joint_1, joint_2, joint_3) -->
+    <link name="upper_arm_${id}">
+      <visual>
+        <origin xyz="0 0 ${-upper_len/2}" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.007" length="${upper_len}"/>
+        </geometry>
+        <material name="orange">
+          <color rgba="0.9 0.5 0.1 1"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 ${-upper_len/2}" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.007" length="${upper_len}"/>
+        </geometry>
+      </collision>
+      <xacro:cyl_inertia m="0.04" r="0.007" h="${upper_len}"/>
+    </link>
+
+    <joint name="joint_${id}" type="revolute">
+      <parent link="motor_${id}"/>
+      <child link="upper_arm_${id}"/>
+      <!-- rpy="0 -pi/2 0": rotates child frame so upper_arm -Z aligns with
+           motor +X (radially outward).  At theta=0 the arm is horizontal,
+           matching the IK convention.  Positive theta rotates the arm
+           downward (correct for Z-positive-downward robot convention). -->
+      <origin xyz="0 0 0" rpy="0 ${-pi/2} 0"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="${-pi/2}" upper="${pi/2}" effort="10.0" velocity="3.14"/>
+      <dynamics damping="${joint_damping}" friction="${joint_friction}"/>
+    </joint>
+
+    <!-- PASSIVE elbow joint (upper arm → forearm) -->
+    <link name="forearm_${id}">
+      <visual>
+        <origin xyz="0 0 ${-lower_len/2}" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.005" length="${lower_len}"/>
+        </geometry>
+        <material name="silver">
+          <color rgba="0.75 0.75 0.75 1"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0 0 ${-lower_len/2}" rpy="0 0 0"/>
+        <geometry>
+          <cylinder radius="0.005" length="${lower_len}"/>
+        </geometry>
+      </collision>
+      <xacro:cyl_inertia m="0.015" r="0.005" h="${lower_len}"/>
+    </link>
+
+    <joint name="elbow_${id}" type="revolute">
+      <parent link="upper_arm_${id}"/>
+      <child link="forearm_${id}"/>
+      <!-- rpy="0 -pi/2 0": rotates forearm frame so its -Z points downward
+           (world Z-down) at theta_elbow=0, giving the correct rest pose where
+           the forearm hangs vertically below the elbow. -->
+      <origin xyz="0 0 ${-upper_len}" rpy="0 ${-pi/2} 0"/>
+      <axis xyz="0 1 0"/>
+      <limit lower="${-pi/2}" upper="${pi/2}" effort="5.0" velocity="3.14"/>
+      <dynamics damping="${joint_damping}" friction="${joint_friction}"/>
+    </joint>
+
+    <!-- EE attachment frame at tip of each forearm -->
+    <link name="ee_attach_${id}">
+      <inertial>
+        <mass value="0.001"/>
+        <inertia ixx="1e-7" ixy="0" ixz="0" iyy="1e-7" iyz="0" izz="1e-7"/>
+      </inertial>
+    </link>
+
+    <joint name="forearm_${id}_to_ee_attach" type="fixed">
+      <parent link="forearm_${id}"/>
+      <child link="ee_attach_${id}"/>
+      <origin xyz="0 0 ${-lower_len}" rpy="0 0 0"/>
+    </joint>
+
+  </xacro:macro>
+
+  <!-- Instantiate three arms at 90°, 210°, 330° -->
+  <xacro:delta_arm id="1" angle_deg="90"/>
+  <xacro:delta_arm id="2" angle_deg="210"/>
+  <xacro:delta_arm id="3" angle_deg="330"/>
+
+  <!-- ================================================================
+       END-EFFECTOR PLATFORM
+       Visually attached to ee_attach_1. In the closed-chain robot all
+       three ee_attach frames coincide — enforced by the IK node, not URDF.
+       ================================================================ -->
+  <link name="end_effector">
+    <visual>
+      <geometry>
+        <cylinder radius="${ee_r}" length="0.008"/>
+      </geometry>
+      <material name="red">
+        <color rgba="0.8 0.15 0.15 1"/>
+      </material>
+    </visual>
+    <collision>
+      <geometry>
+        <cylinder radius="${ee_r}" length="0.008"/>
+      </geometry>
+    </collision>
+    <inertial>
+      <mass value="0.020"/>
+      <inertia ixx="1.5e-5" ixy="0" ixz="0" iyy="1.5e-5" iyz="0" izz="3.2e-5"/>
+    </inertial>
+  </link>
+
+  <!-- EE platform is physically driven by arm 1 (URDF trees cannot close
+       kinematic loops).  Arms 2 & 3 each get a massless visual-only rod that
+       runs from their ee_attach frame back to the EE so the robot looks
+       closed in RViz/Gazebo.  The physics constraint is enforced by the IK
+       sending geometrically consistent joint angles to all three arms. -->
+  <joint name="ee_attach_1_to_ee" type="fixed">
+    <parent link="ee_attach_1"/>
+    <child link="end_effector"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Visual connector arm 2 → EE (massless, visual only) -->
+  <link name="ee_connector_2">
+    <visual>
+      <geometry>
+        <sphere radius="0.005"/>
+      </geometry>
+      <material name="red">
+        <color rgba="0.8 0.15 0.15 0.5"/>
+      </material>
+    </visual>
+    <inertial>
+      <mass value="0.0001"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="ee_attach_2_to_connector" type="fixed">
+    <parent link="ee_attach_2"/>
+    <child link="ee_connector_2"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- Visual connector arm 3 → EE (massless, visual only) -->
+  <link name="ee_connector_3">
+    <visual>
+      <geometry>
+        <sphere radius="0.005"/>
+      </geometry>
+      <material name="red">
+        <color rgba="0.8 0.15 0.15 0.5"/>
+      </material>
+    </visual>
+    <inertial>
+      <mass value="0.0001"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="ee_attach_3_to_connector" type="fixed">
+    <parent link="ee_attach_3"/>
+    <child link="ee_connector_3"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ================================================================
+       ros2_control configuration (conditionally sim or real hardware)
+       ================================================================ -->
+  <xacro:include filename="$(find deltaflex_description)/urdf/deltaflex.ros2_control.xacro"/>
+
+</robot>

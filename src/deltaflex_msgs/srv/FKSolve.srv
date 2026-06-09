@@ -1,0 +1,9 @@
+# Request: motor joint angles [rad]
+float64[] joint_angles
+---
+# Response: end-effector position [m]
+float64 x
+float64 y
+float64 z
+bool success
+string message

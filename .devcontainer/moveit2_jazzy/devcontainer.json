@@ -21,7 +21,7 @@
     ],
     "containerEnv": {
         //"DISPLAY": "${localEnv:DISPLAY}",
-        "DISPLAY": "$host.docker.internal:0.0", // Needed for GUI: "${localEnv:DISPLAY}" for Linux, "host.docker.internal:0.0" for Windows. For Windows, VcXsrv must be running
+        "DISPLAY": "host.docker.internal:0.0", // Needed for GUI: "${localEnv:DISPLAY}" for Linux, "host.docker.internal:0.0" for Windows. For Windows, VcXsrv/XLaunch must be running on port 0
         "WAYLAND_DISPLAY": "${localEnv:WAYLAND_DISPLAY}",
         "XDG_RUNTIME_DIR": "${localEnv:XDG_RUNTIME_DIR}",
         "PULSE_SERVER": "${localEnv:PULSE_SERVER}",

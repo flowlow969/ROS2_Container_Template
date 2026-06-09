@@ -1,0 +1,87 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!--
+    Switch between Gazebo simulation and real hardware by passing: use_sim:=true   (default)  → GazeboSimSystem plugin use_sim:=false             → custom DeltaFlexHardwareInterface (future)
+  -->
+  <xacro:arg name="use_sim" default="true"/>
+  <xacro:arg name="serial_port" default="/dev/ttyACM0"/>
+  <xacro:arg name="baud_rate" default="115200"/>
+  <xacro:arg name="steps_per_rev" default="1600"/>
+  <xacro:arg name="feed_rate" default="60.0"/>
+
+  <!-- ============================================================
+       SIMULATION — Gazebo Harmonic / gz_ros2_control
+       ============================================================ -->
+  <xacro:if value="$(arg use_sim)">
+    <ros2_control name="DeltaFlexSystem" type="system">
+      <hardware>
+        <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+      </hardware>
+
+      <joint name="joint_1">
+        <command_interface name="position">
+          <param name="min">-1.5708</param>
+          <param name="max">1.5708</param>
+          <param name="initial_value">0.0</param>
+        </command_interface>
+        <state_interface name="position"/>
+      </joint>
+
+      <joint name="joint_2">
+        <command_interface name="position">
+          <param name="min">-1.5708</param>
+          <param name="max">1.5708</param>
+          <param name="initial_value">0.0</param>
+        </command_interface>
+        <state_interface name="position"/>
+      </joint>
+
+      <joint name="joint_3">
+        <command_interface name="position">
+          <param name="min">-1.5708</param>
+          <param name="max">1.5708</param>
+          <param name="initial_value">0.0</param>
+        </command_interface>
+        <state_interface name="position"/>
+      </joint>
+    </ros2_control>
+
+    <!-- Gazebo Harmonic plugin — loads controller_manager inside the sim -->
+    <gazebo>
+      <plugin filename="libgz_ros2_control-system.so" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+        <parameters>$(find deltaflex_bringup)/config/controllers.yaml</parameters>
+        <hold_joints>true</hold_joints>
+      </plugin>
+    </gazebo>
+  </xacro:if>
+
+  <!-- ============================================================
+       REAL HARDWARE — custom serial interface (future use)
+       ============================================================ -->
+  <xacro:unless value="$(arg use_sim)">
+    <ros2_control name="DeltaFlexSystem" type="system">
+      <hardware>
+        <plugin>deltaflex_hardware/DeltaFlexHardwareInterface</plugin>
+        <param name="serial_port">$(arg serial_port)</param>
+        <param name="baud_rate">$(arg baud_rate)</param>
+        <param name="steps_per_rev">$(arg steps_per_rev)</param>
+        <param name="feed_rate">$(arg feed_rate)</param>
+      </hardware>
+
+      <joint name="joint_1">
+        <command_interface name="position"/>
+        <state_interface name="position"/>
+      </joint>
+      <joint name="joint_2">
+        <command_interface name="position"/>
+        <state_interface name="position"/>
+      </joint>
+      <joint name="joint_3">
+        <command_interface name="position"/>
+        <state_interface name="position"/>
+      </joint>
+    </ros2_control>
+  </xacro:unless>
+
+</robot>
